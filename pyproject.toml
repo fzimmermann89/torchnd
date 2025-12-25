@@ -3,7 +3,7 @@ requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "torch-conv-nd"
+name = "torchnd"
 version = "0.1.0"
 description = "ND Convolution for PyTorch"
 readme = "README.md"
@@ -76,7 +76,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["torch_conv_nd"]
+known-first-party = ["torchnd"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -118,7 +118,7 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=torch_conv_nd",
+    "--cov=torchnd",
     "--cov-report=term-missing",
     "--cov-report=html",
 ]

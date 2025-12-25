@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torch_conv_nd import ConvNd, ConvTransposeNd, conv_nd
+from torchnd import ConvNd, ConvTransposeNd, conv_nd
 
 
 def make_shapes(ndim: int) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:

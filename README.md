@@ -1,11 +1,11 @@
-# torch-conv-nd
+# torchnd
 
 N-dimensional convolution for PyTorch that works with any number of spatial dimensions, supporting groups, dilation, transposed convolution, complex numbers, and arbitrary dimension layouts.
 
 ## Installation
 
 ```bash
-pip install torch-conv-nd
+pip install torchnd
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ pip install torch-conv-nd
 **2D convolution:**
 ```python
 import torch
-from torch_conv_nd import conv_nd
+from torchnd import conv_nd
 
 x = torch.randn(2, 4, 16, 16)
 weight = torch.randn(8, 4, 3, 3)
@@ -60,6 +60,59 @@ out = conv_nd(
     dilation=(1, 2)
 )
 ```
+
+**Modules:**
+```python
+from torchnd import ConvNd, ConvTransposeNd
+
+conv = ConvNd(4, 8, 3, dim=(-2, -1), padding=1)
+out = conv(x)
+```
+
+**Padding:**
+```python
+from torchnd import pad_nd, adjoint_pad_nd
+
+# Pad or crop arbitrary dimensions
+padded = pad_nd(x, pad=(1, 1, 2, 2), dims=(-2, -1), mode="reflect")
+cropped = pad_nd(x, pad=(-1, -1), dims=(0,))  # Negative values crop
+
+# Adjoint of padding (unpads)
+unpadded = adjoint_pad_nd(padded, pad=(1, 1, 2, 2), dims=(-2, -1))
+```
+
+**Adjoint operators:**
+```python
+from torchnd import ConvNd
+
+conv = ConvNd(4, 8, 3, dim=(-2, -1), padding=1, bias=False)
+x = torch.randn(2, 4, 16, 16)
+y = torch.randn_like(conv(x))
+
+# Adjoint satisfies: <conv(x), y> = <x, conv.adjoint(y)>
+# For ConvNd: adjoint is transposed convolution with conjugated weights
+adj_y = conv.adjoint(y, input_shape=(16, 16))
+```
+
+## Functions
+
+### pad_nd
+
+N-dimensional padding and cropping with flexible dimension specification. Supports arbitrary dimension layouts, not limited to the last N dimensions. Negative padding values crop the tensor.
+
+Modes: `constant`, `reflect`, `replicate`, `circular`. Each dimension can use a different mode. For constant mode, negative padding crops symmetrically. For non-constant modes, negative padding is not supported.
+
+The `dims` parameter specifies which dimensions to pad. If `None`, pads the last N dimensions where N = len(pad) // 2. Padding is specified as pairs (left, right) per dimension.
+
+### adjoint_pad_nd
+
+Computes the adjoint of `pad_nd` via autograd. For a padding operator P, the adjoint P* satisfies the inner product identity: `<Px, y> = <x, P*y>` for all x, y. The adjoint unpads the tensor, summing contributions from padded regions back into the original shape. For constant/zeros mode, the adjoint is equivalent to cropping. For other modes, it correctly handles the adjoint of the boundary extension.
+
+### Adjoint convolution
+
+The `ConvNd` and `ConvTransposeNd` modules provide `adjoint()` methods. For `ConvNd`, the adjoint is the transposed convolution with conjugated weights (for complex) or identical weights (for real). For `ConvTransposeNd`, the adjoint is the forward convolution with conjugated weights.
+
+The adjoint satisfies the inner product identity: `<Ax, y> = <x, A*y>` where A is the convolution operator and A* is its adjoint. This is verified via dot product tests. The adjoint is undefined when bias is present.
 
 ## Implementation
 

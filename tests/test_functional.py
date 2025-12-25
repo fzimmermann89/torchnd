@@ -5,8 +5,8 @@ from collections.abc import Iterator
 import pytest
 import torch
 
-from torch_conv_nd import adjoint_pad_nd, conv_nd, pad_nd, pad_or_crop_to_size
-from torch_conv_nd.functional import CONV_REGISTRY, CONV_TRANSPOSE_REGISTRY
+from torchnd import adjoint_pad_nd, conv_nd, pad_nd, pad_or_crop_to_size
+from torchnd.functional import CONV_REGISTRY, CONV_TRANSPOSE_REGISTRY
 
 
 @pytest.fixture
