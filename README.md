@@ -53,7 +53,7 @@ out = conv_nd(x, weight, dim=(-2, -1), padding=1)
 x = torch.randn(2, 4, 16, 16)
 weight = torch.randn(8, 4, 3, 3)
 out = conv_nd(
-    x, weight, 
+    x, weight,
     dim=(-2, -1),
     stride=(2, 1),
     padding=(1, 2),

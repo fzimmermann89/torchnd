@@ -89,9 +89,7 @@ class _ConvNdBase(torch.nn.Module, ABC):
         if in_channels % groups != 0:
             raise ValueError(f"in_channels ({in_channels}) must be divisible by groups ({groups})")
         if out_channels % groups != 0:
-            raise ValueError(
-                f"out_channels ({out_channels}) must be divisible by groups ({groups})"
-            )
+            raise ValueError(f"out_channels ({out_channels}) must be divisible by groups ({groups})")
 
         num_spatial = len(dim)
         self.in_channels = in_channels
@@ -331,21 +329,13 @@ class ConvNd(_ConvNdBase):
         effective_padding = self.padding
 
         if not all(m == "zeros" for m in self.padding_mode):
-            effective_padding = tuple(
-                0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding)
-            )
+            effective_padding = tuple(0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding))
             for mode in ("reflect", "replicate", "circular"):
-                dims_idx = [
-                    i
-                    for i, (m, p) in enumerate(zip(self.padding_mode, self.padding))
-                    if m == mode and p > 0
-                ]
+                dims_idx = [i for i, (m, p) in enumerate(zip(self.padding_mode, self.padding)) if m == mode and p > 0]
                 if dims_idx:
                     spatial_dims = tuple(self.dim[i] for i in dims_idx)
                     pad_spec = [v for i in dims_idx for v in (self.padding[i], self.padding[i])]
-                    x = checkpoint(
-                        pad_nd, x, pad_spec, mode, 0.0, spatial_dims, use_reentrant=False
-                    )
+                    x = checkpoint(pad_nd, x, pad_spec, mode, 0.0, spatial_dims, use_reentrant=False)
 
         out = conv_nd(
             x,
@@ -401,9 +391,7 @@ class ConvNd(_ConvNdBase):
 
         effective_padding = self.padding
         if not all(m == "zeros" for m in self.padding_mode):
-            effective_padding = tuple(
-                0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding)
-            )
+            effective_padding = tuple(0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding))
 
         num_spatial = len(self.dim)
         if input_shape is None:
@@ -412,14 +400,10 @@ class ConvNd(_ConvNdBase):
             out_pad = (0,) * num_spatial
         else:
             if len(input_shape) != num_spatial:
-                raise ValueError(
-                    f"input_shape must have length {num_spatial}, got {len(input_shape)}"
-                )
+                raise ValueError(f"input_shape must have length {num_spatial}, got {len(input_shape)}")
 
             pads: list[int] = []
-            for i, (n_in, k, s, p, d) in enumerate(
-                zip(input_shape, self.kernel_size, self.stride, self.padding, self.dilation)
-            ):
+            for i, (n_in, k, s, p, d) in enumerate(zip(input_shape, self.kernel_size, self.stride, self.padding, self.dilation)):
                 eff_p = effective_padding[i]
                 n_out = (n_in + 2 * p - d * (k - 1) - 1) // s + 1
                 base = (n_out - 1) * s - 2 * eff_p + d * (k - 1) + 1
@@ -449,18 +433,12 @@ class ConvNd(_ConvNdBase):
 
         if not all(m == "zeros" for m in self.padding_mode):
             for mode in ("reflect", "replicate", "circular"):
-                dims_idx = [
-                    i
-                    for i, (m, p) in enumerate(zip(self.padding_mode, self.padding))
-                    if m == mode and p > 0
-                ]
+                dims_idx = [i for i, (m, p) in enumerate(zip(self.padding_mode, self.padding)) if m == mode and p > 0]
                 if dims_idx:
                     spatial_dims = tuple(self.dim[i] for i in dims_idx)
                     pad_spec = [v for i in dims_idx for v in (self.padding[i], self.padding[i])]
                     original_sizes = [input_shape[i] for i in dims_idx] if input_shape else None
-                    out = adjoint_pad_nd(
-                        out, pad_spec, mode=mode, dims=spatial_dims, original_sizes=original_sizes
-                    )
+                    out = adjoint_pad_nd(out, pad_spec, mode=mode, dims=spatial_dims, original_sizes=original_sizes)
 
         return out
 
@@ -566,9 +544,7 @@ class ConvTransposeNd(_ConvNdBase):
 
         effective_padding = self.padding
         if not all(m == "zeros" for m in self.padding_mode):
-            effective_padding = tuple(
-                0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding)
-            )
+            effective_padding = tuple(0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding))
 
         out = conv_nd(
             x,
@@ -585,17 +561,11 @@ class ConvTransposeNd(_ConvNdBase):
 
         if not all(m == "zeros" for m in self.padding_mode):
             for mode in ("reflect", "replicate", "circular"):
-                dims_idx = [
-                    i
-                    for i, (m, p) in enumerate(zip(self.padding_mode, self.padding))
-                    if m == mode and p > 0
-                ]
+                dims_idx = [i for i, (m, p) in enumerate(zip(self.padding_mode, self.padding)) if m == mode and p > 0]
                 if dims_idx:
                     spatial_dims = tuple(self.dim[i] for i in dims_idx)
                     pad_spec = [v for i in dims_idx for v in (self.padding[i], self.padding[i])]
-                    original_sizes = [
-                        out.shape[self.dim[i]] - 2 * self.padding[i] for i in dims_idx
-                    ]
+                    original_sizes = [out.shape[self.dim[i]] - 2 * self.padding[i] for i in dims_idx]
                     out = checkpoint(
                         adjoint_pad_nd,
                         out,
@@ -604,7 +574,6 @@ class ConvTransposeNd(_ConvNdBase):
                         0.0,
                         spatial_dims,
                         original_sizes,
-                        True,
                         use_reentrant=False,
                     )
 
@@ -644,15 +613,9 @@ class ConvTransposeNd(_ConvNdBase):
 
         effective_padding = self.padding
         if not all(m == "zeros" for m in self.padding_mode):
-            effective_padding = tuple(
-                0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding)
-            )
+            effective_padding = tuple(0 if m != "zeros" and p > 0 else p for m, p in zip(self.padding_mode, self.padding))
             for mode in ("reflect", "replicate", "circular"):
-                dims_idx = [
-                    i
-                    for i, (m, p) in enumerate(zip(self.padding_mode, self.padding))
-                    if m == mode and p > 0
-                ]
+                dims_idx = [i for i, (m, p) in enumerate(zip(self.padding_mode, self.padding)) if m == mode and p > 0]
                 if dims_idx:
                     spatial_dims = tuple(self.dim[i] for i in dims_idx)
                     pad_spec = [v for i in dims_idx for v in (self.padding[i], self.padding[i])]

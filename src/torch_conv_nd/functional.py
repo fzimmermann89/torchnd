@@ -78,9 +78,7 @@ def conv_nd(
     output_padding = _normalize_tuple(output_padding, num_spatial)
 
     def conv(a: Tensor, b: Tensor) -> Tensor:
-        return _dispatch(
-            a, b, dim, channel_dim, stride, padding, dilation, groups, transposed, output_padding
-        )
+        return _dispatch(a, b, dim, channel_dim, stride, padding, dilation, groups, transposed, output_padding)
 
     match (x.is_complex(), weight.is_complex()):
         case (True, True):
@@ -112,9 +110,7 @@ def _dispatch(
     ndim = x.ndim
     spatial_dims = tuple(d % ndim for d in dim)
     channel_dim_normalized = channel_dim % ndim
-    batch_dims = tuple(
-        d for d in range(ndim) if d not in set(spatial_dims) and d != channel_dim_normalized
-    )
+    batch_dims = tuple(d for d in range(ndim) if d not in set(spatial_dims) and d != channel_dim_normalized)
 
     to_standard = batch_dims + (channel_dim_normalized,) + spatial_dims
     x_perm = x.permute(to_standard)
@@ -123,13 +119,9 @@ def _dispatch(
     batch_shape = x_perm.shape[:num_batch]
     x_flat = x_perm.reshape(-1 if batch_shape else 1, *x_perm.shape[num_batch:])
 
-    out_flat = _conv_core(
-        x_flat, weight, stride, padding, dilation, groups, transposed, output_padding
-    )
+    out_flat = _conv_core(x_flat, weight, stride, padding, dilation, groups, transposed, output_padding)
 
-    out = (
-        out_flat.reshape(*batch_shape, *out_flat.shape[1:]) if batch_shape else out_flat.squeeze(0)
-    )
+    out = out_flat.reshape(*batch_shape, *out_flat.shape[1:]) if batch_shape else out_flat.squeeze(0)
     from_standard = torch.argsort(torch.tensor(to_standard)).tolist()
     return out.permute(from_standard)
 
@@ -164,9 +156,7 @@ def _conv_core(
         return registry[num_spatial](x, weight, **kwargs)
 
     if transposed:
-        return _conv_transpose_recursive(
-            x, weight, stride, padding, dilation, groups, output_padding
-        )
+        return _conv_transpose_recursive(x, weight, stride, padding, dilation, groups, output_padding)
     return _conv_recursive(x, weight, stride, padding, dilation, groups)
 
 
@@ -484,7 +474,5 @@ def adjoint_pad_nd(
 
     x = torch.zeros(unpadded_shape, device=input.device, dtype=input.dtype, requires_grad=True)
     y = pad_nd(x, pad, mode=mode, value=value, dims=dims)
-    (gx,) = torch.autograd.grad(
-        y, x, grad_outputs=input, retain_graph=False, create_graph=input.requires_grad
-    )
+    (gx,) = torch.autograd.grad(y, x, grad_outputs=input, retain_graph=False, create_graph=True)
     return gx

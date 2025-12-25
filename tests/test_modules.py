@@ -131,9 +131,7 @@ class TestAdjoint:
             {"stride": 1, "padding": 2, "dilation": 2},
         ],
     )
-    def test_inner_product_identity_conv(
-        self, ndim: int, dtype: torch.dtype, config: dict[str, int]
-    ) -> None:
+    def test_inner_product_identity_conv(self, ndim: int, dtype: torch.dtype, config: dict[str, int]) -> None:
         """Verify <Ax, y> == <x, A^H y> for ConvNd."""
         x_shape, _, dim = make_shapes(ndim)
         in_ch, out_ch = 4, 8
@@ -168,9 +166,7 @@ class TestAdjoint:
             {"stride": 1, "padding": 2, "dilation": 2},
         ],
     )
-    def test_inner_product_identity_transposed(
-        self, ndim: int, dtype: torch.dtype, config: dict[str, int]
-    ) -> None:
+    def test_inner_product_identity_transposed(self, ndim: int, dtype: torch.dtype, config: dict[str, int]) -> None:
         """Verify <Ax, y> == <x, A^H y> for ConvTransposeNd."""
         x_shape, _, dim = make_shapes(ndim)
         in_ch, out_ch = 8, 4
@@ -401,9 +397,7 @@ class TestPaddingMode:
 
     def test_transpose_tuple_mode(self) -> None:
         """ConvTransposeNd accepts per-dimension padding modes."""
-        conv = ConvTransposeNd(
-            8, 4, kernel_size=3, padding=2, padding_mode=("reflect", "replicate")
-        )
+        conv = ConvTransposeNd(8, 4, kernel_size=3, padding=2, padding_mode=("reflect", "replicate"))
         x = torch.randn(2, 8, 8, 8)
         y = conv(x)
         assert y.shape == (2, 4, 6, 6)

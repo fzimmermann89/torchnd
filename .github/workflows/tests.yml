@@ -2,16 +2,17 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [master]
   pull_request:
-    branches: [main, develop]
+    branches: [master]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.12"]
+        torch-version: ["2.6.0","2.8.0",]
 
     steps:
       - uses: actions/checkout@v4
@@ -24,8 +25,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch==${{ matrix.torch-version }} --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[dev]"
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run pytest
         run: pytest --cov=torch_conv_nd --cov-report=xml --cov-report=term
@@ -37,4 +38,3 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
-
