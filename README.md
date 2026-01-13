@@ -96,6 +96,12 @@ adj_y = conv.adjoint(y, input_shape=(16, 16))
 
 ## Functions
 
+### conv_nd
+
+N-dimensional convolution with flexible dimension specification. Supports arbitrary spatial dimensions via recursive decomposition when native PyTorch implementations (1D, 2D, 3D) are unavailable. Handles complex numbers, grouped convolution, dilation, stride, and transposed convolution.
+
+The `dim` parameter specifies which dimensions are spatial. The `channel_dim` parameter specifies the channel dimension. This allows for arbitrary tensor layouts (e.g., channel-last).
+
 ### pad_nd
 
 N-dimensional padding and cropping with flexible dimension specification. Supports arbitrary dimension layouts, not limited to the last N dimensions. Negative padding values crop the tensor.
@@ -103,6 +109,10 @@ N-dimensional padding and cropping with flexible dimension specification. Suppor
 Modes: `constant`, `reflect`, `replicate`, `circular`. Each dimension can use a different mode. For constant mode, negative padding crops symmetrically. For non-constant modes, negative padding is not supported.
 
 The `dims` parameter specifies which dimensions to pad. If `None`, pads the last N dimensions where N = len(pad) // 2. Padding is specified as pairs (left, right) per dimension.
+
+### pad_or_crop_to_size
+
+Pad or crop a tensor to a target size, centering the original content. Combines padding and cropping in a single operation. Useful for resizing tensors to a fixed shape while keeping the content centered.
 
 ### adjoint_pad_nd
 

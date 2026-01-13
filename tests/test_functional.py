@@ -229,6 +229,14 @@ class TestAutograd:
         w = torch.randn(2, 3, 3, 3, 3, dtype=torch.float64, requires_grad=True)
         assert torch.autograd.gradcheck(lambda a, b: conv_nd(a, b, dim=(-3, -2, -1), padding=1, transposed=True), (x, w))
 
+    def test_gradcheck_transpose_recursive_with_dilation(self, disable_conv3d: Iterator[None]) -> None:  # noqa: ARG002
+        """Verify gradient correctness for recursive transpose convolution with dilation > 1."""
+        x = torch.randn(1, 2, 4, 4, 4, dtype=torch.float64, requires_grad=True)
+        w = torch.randn(2, 3, 3, 3, 3, dtype=torch.float64, requires_grad=True)
+        assert torch.autograd.gradcheck(
+            lambda a, b: conv_nd(a, b, dim=(-3, -2, -1), padding=2, dilation=2, transposed=True), (x, w)
+        )
+
     def test_gradcheck_complex(self) -> None:
         x = torch.randn(1, 2, 5, 5, dtype=torch.complex128, requires_grad=True)
         w = torch.randn(3, 2, 3, 3, dtype=torch.complex128, requires_grad=True)
@@ -250,6 +258,15 @@ class TestEdgeCases:
         x, w = torch.randn(4, 8, 8), torch.randn(8, 4, 3, 3)
         expected = torch.nn.functional.conv2d(x.unsqueeze(0), w, padding=1).squeeze(0)
         result = conv_nd(x, w, dim=(-2, -1), channel_dim=0, padding=1)
+        torch.testing.assert_close(result, expected)
+
+    def test_zero_spatial_dims(self) -> None:
+        """Verify 0-dimensional spatial convolution (scalar per channel)."""
+        x = torch.randn(2, 4)  # batch=2, channels=4, no spatial dims
+        w = torch.randn(8, 4)  # out=8, in=4, no spatial dims
+        result = conv_nd(x, w, dim=(), channel_dim=1)
+        # 0D conv is a linear transformation: out[b, o] = sum_i(x[b, i] * w[o, i])
+        expected = torch.einsum("bi,oi->bo", x, w)
         torch.testing.assert_close(result, expected)
 
 
@@ -354,6 +371,12 @@ class TestPadNd:
         """Verify invalid inputs raise informative errors."""
         with pytest.raises(ValueError, match=error_match):
             pad_nd(torch.zeros(2, 2), **kwargs)
+
+    @pytest.mark.parametrize("mode", ["reflect", "replicate", "circular"])
+    def test_negative_padding_non_constant_raises(self, mode: str) -> None:
+        """Verify negative padding with non-constant mode raises ValueError."""
+        with pytest.raises(ValueError, match="Negative padding is not supported"):
+            pad_nd(torch.zeros(5, 5), (-1, 0), dims=(0,), mode=mode)
 
     def test_multi_dim_non_constant_chunking(self) -> None:
         """Verify correct handling of >3 dims requiring multiple pad calls."""

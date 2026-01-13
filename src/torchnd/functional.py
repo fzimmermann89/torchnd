@@ -253,7 +253,7 @@ def _conv_transpose_recursive(
 
 
 def pad_nd(
-    input: Tensor,
+    x: Tensor,
     pad: Sequence[int],
     mode: str = "constant",
     value: float = 0.0,
@@ -264,7 +264,7 @@ def pad_nd(
 
     Parameters
     ----------
-    input
+    x
         Input tensor.
     pad
         Padding sizes as pairs (left, right) per dimension.
@@ -285,9 +285,9 @@ def pad_nd(
 
     n_dims = len(pad) // 2
     if n_dims == 0:
-        return input
+        return x
 
-    ndim = input.ndim
+    ndim = x.ndim
 
     if dims is None:
         target_dims = list(range(ndim - 1, ndim - n_dims - 1, -1))
@@ -301,13 +301,13 @@ def pad_nd(
             raise ValueError("duplicate dimensions not supported")
 
     if mode == "constant":
-        return _pad_constant(input, target_dims, pad_pairs, value)
+        return _pad_constant(x, target_dims, pad_pairs, value)
 
-    return _pad_non_constant(input, target_dims, pad_pairs, mode)
+    return _pad_non_constant(x, target_dims, pad_pairs, mode)
 
 
 def pad_or_crop_to_size(
-    input: Tensor,
+    x: Tensor,
     size: Sequence[int],
     mode: str = "constant",
     value: float = 0.0,
@@ -318,7 +318,7 @@ def pad_or_crop_to_size(
 
     Parameters
     ----------
-    input
+    x
         Input tensor.
     size
         Target sizes for each dimension to adjust.
@@ -333,7 +333,7 @@ def pad_or_crop_to_size(
     -------
         Tensor with specified dimensions resized to target.
     """
-    ndim = input.ndim
+    ndim = x.ndim
 
     if dims is None:
         target_dims = list(range(ndim - len(size), ndim))
@@ -343,38 +343,42 @@ def pad_or_crop_to_size(
         target_dims = [d % ndim for d in dims]
 
     pad_list: list[int] = []
-    for dim, target in zip(target_dims, size):
-        diff = target - input.shape[dim]
+    for dim, target in zip(target_dims, size, strict=True):
+        diff = target - x.shape[dim]
         pad_list.extend([diff // 2, diff - diff // 2])
 
-    return pad_nd(input, pad_list, mode=mode, value=value, dims=target_dims)
+    return pad_nd(x, pad_list, mode=mode, value=value, dims=target_dims)
 
 
 def _pad_constant(
-    input: Tensor,
+    x: Tensor,
     target_dims: list[int],
     pad_pairs: list[tuple[int, int]],
     value: float,
 ) -> Tensor:
-    dim_to_pad = dict(zip(target_dims, pad_pairs))
+    dim_to_pad = dict(zip(target_dims, pad_pairs, strict=True))
 
     full_pad: list[int] = []
-    for d in range(input.ndim - 1, -1, -1):
+    for d in range(x.ndim - 1, -1, -1):
         full_pad.extend(dim_to_pad.get(d, (0, 0)))
 
     while len(full_pad) > 2 and full_pad[-2:] == [0, 0]:
         full_pad = full_pad[:-2]
 
-    return torch.nn.functional.pad(input, full_pad, mode="constant", value=value)
+    return torch.nn.functional.pad(x, full_pad, mode="constant", value=value)
 
 
 def _pad_non_constant(
-    input: Tensor,
+    x: Tensor,
     target_dims: list[int],
     pad_pairs: list[tuple[int, int]],
     mode: str,
 ) -> Tensor:
-    result = input
+    for left, right in pad_pairs:
+        if left < 0 or right < 0:
+            raise ValueError(f"Negative padding is not supported for mode '{mode}'. Use mode='constant' for cropping.")
+
+    result = x
 
     for i in range(0, len(target_dims), 3):
         chunk_dims = target_dims[i : i + 3]
@@ -416,7 +420,7 @@ def _pad_non_constant(
 
 
 def adjoint_pad_nd(
-    input: Tensor,
+    x: Tensor,
     pad: Sequence[int],
     mode: str = "constant",
     value: float = 0.0,
@@ -428,14 +432,14 @@ def adjoint_pad_nd(
 
     Parameters
     ----------
-    input
+    x
         Padded tensor (output space of pad_nd).
     pad
         Padding sizes as pairs (left, right) per dimension (same as pad_nd).
     mode
         'constant', 'circular', 'reflect', or 'replicate'.
     value
-        Fill value for 'constant' mode.
+        Fill value for 'constant' mode (unused in adjoint computation).
     dims
         Dimensions that were padded. If None, assumes last N dimensions.
     original_sizes
@@ -451,9 +455,9 @@ def adjoint_pad_nd(
 
     n_dims = len(pad) // 2
     if n_dims == 0:
-        return input
+        return x
 
-    ndim = input.ndim
+    ndim = x.ndim
 
     if dims is None:
         target_dims = list(range(ndim - 1, ndim - n_dims - 1, -1))
@@ -466,13 +470,24 @@ def adjoint_pad_nd(
         original_sizes = []
         for i, d in enumerate(target_dims):
             left, right = pad[2 * i], pad[2 * i + 1]
-            original_sizes.append(input.shape[d] - left - right)
+            original_sizes.append(x.shape[d] - left - right)
 
-    unpadded_shape = list(input.shape)
+    # Fast path for constant/zeros mode with non-negative padding: adjoint is simple cropping
+    if mode == "constant" and all(p >= 0 for p in pad):
+        slices: list[slice] = [slice(None)] * ndim
+        for i, d in enumerate(target_dims):
+            left, right = pad[2 * i], pad[2 * i + 1]
+            start = left if left > 0 else None
+            end = -right if right > 0 else None
+            slices[d] = slice(start, end)
+        return x[tuple(slices)]
+
+    # General path: use autograd to compute adjoint
+    unpadded_shape = list(x.shape)
     for i, d in enumerate(target_dims):
         unpadded_shape[d] = original_sizes[i]
 
-    x = torch.zeros(unpadded_shape, device=input.device, dtype=input.dtype, requires_grad=True)
-    y = pad_nd(x, pad, mode=mode, value=value, dims=dims)
-    (gx,) = torch.autograd.grad(y, x, grad_outputs=input, retain_graph=False, create_graph=True)
-    return gx
+    dummy = torch.zeros(unpadded_shape, device=x.device, dtype=x.dtype, requires_grad=True)
+    padded = pad_nd(dummy, pad, mode=mode, value=value, dims=dims)
+    (grad,) = torch.autograd.grad(padded, dummy, grad_outputs=x, retain_graph=False, create_graph=x.requires_grad)
+    return grad

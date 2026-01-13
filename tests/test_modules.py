@@ -576,3 +576,35 @@ class TestPaddingModeAdjoint:
         rhs = torch.vdot(x.flatten(), conv.adjoint(y, input_shape=(8, 8, 8)).flatten())
 
         torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
+
+
+class TestAdjointWithOutputPadding:
+    """Test adjoint correctness when output_padding is non-zero."""
+
+    @pytest.mark.parametrize("ndim", [1, 2])
+    @pytest.mark.parametrize("output_padding", [1])
+    def test_inner_product_identity_with_output_padding(self, ndim: int, output_padding: int) -> None:
+        """Verify <Ax, y> == <x, A^H y> for ConvTransposeNd with output_padding."""
+        in_ch, out_ch = 4, 8
+        spatial_in = (8,) * ndim
+        dim = tuple(range(-ndim, 0))
+
+        conv = ConvTransposeNd(
+            in_channels=in_ch,
+            out_channels=out_ch,
+            kernel_size=3,
+            dim=dim,
+            stride=2,
+            padding=1,
+            output_padding=output_padding,
+            bias=False,
+        )
+
+        input_shape = (2, in_ch, *spatial_in)
+        x = torch.randn(input_shape)
+        y = torch.randn_like(conv(x))
+
+        lhs = torch.vdot(conv(x).flatten(), y.flatten())
+        rhs = torch.vdot(x.flatten(), conv.adjoint(y).flatten())
+
+        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)

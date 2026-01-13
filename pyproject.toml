@@ -52,7 +52,7 @@ py-modules = []
 where = ["src"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 130
 
 [tool.ruff.lint]
