@@ -122,7 +122,7 @@ def _dispatch(
     out_flat = _conv_core(x_flat, weight, stride, padding, dilation, groups, transposed, output_padding)
 
     out = out_flat.reshape(*batch_shape, *out_flat.shape[1:]) if batch_shape else out_flat.squeeze(0)
-    from_standard = torch.argsort(torch.tensor(to_standard)).tolist()
+    from_standard = sorted(range(len(to_standard)), key=to_standard.__getitem__)
     return out.permute(from_standard)
 
 
