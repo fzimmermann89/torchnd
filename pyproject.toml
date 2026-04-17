@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchnd"
-version = "0.1.0"
+version = "0.1.1"
 description = "ND Convolution for PyTorch"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -50,6 +50,9 @@ py-modules = []
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+torchnd = ["py.typed"]
 
 [tool.ruff]
 target-version = "py310"
