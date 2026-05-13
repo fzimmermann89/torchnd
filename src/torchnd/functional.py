@@ -30,6 +30,12 @@ LINEAR_INTERPOLATION_ADJOINT_REGISTRY: dict[int, Callable[..., Tensor]] = {
     3: torch.ops.aten.upsample_trilinear3d_backward,
 }
 
+NEAREST_INTERPOLATION_ADJOINT_REGISTRY: dict[int, Callable[..., Tensor]] = {
+    1: torch.ops.aten.upsample_nearest1d_backward,
+    2: torch.ops.aten.upsample_nearest2d_backward,
+    3: torch.ops.aten.upsample_nearest3d_backward,
+}
+
 
 def _normalize_tuple(value: int | tuple[int, ...], length: int) -> tuple[int, ...]:
     return (value,) * length if isinstance(value, int) else tuple(value)
@@ -120,6 +126,69 @@ def linear_interpolation_nd(
     return _linear_interpolation_nd_real(x, size, dims, align_corners)
 
 
+def _nearest_interpolation_nd_real(
+    x: Tensor,
+    size: Sequence[int],
+    dims: Sequence[int] | None = None,
+) -> Tensor:
+    size = tuple(size)
+    if dims is None:
+        if len(size) > x.ndim:
+            raise ValueError("len(size) must be <= x.ndim")
+        target_dims = tuple(range(x.ndim - len(size), x.ndim))
+    elif len(dims) != len(size):
+        raise ValueError("len(dims) must equal len(size)")
+    else:
+        target_dims = _normalize_dims(x.ndim, dims)
+    if len(set(target_dims)) != len(target_dims) or any(dim < 0 or dim >= x.ndim for dim in target_dims):
+        raise ValueError("target_dims must be unique and within tensor dimensions")
+
+    for i in range(0, len(target_dims), 3):
+        chunk_dims = target_dims[i : i + 3]
+        chunk_size = size[i : i + 3]
+
+        other_dims = tuple(dim for dim in range(x.ndim) if dim not in chunk_dims)
+        to_standard = (*other_dims, *chunk_dims)
+        from_standard = tuple(sorted(range(len(to_standard)), key=to_standard.__getitem__))
+        other_shape = tuple(x.shape[dim] for dim in other_dims)
+
+        x = x.permute(to_standard)
+        x = x.flatten(end_dim=len(other_dims) - 1).unsqueeze(0) if other_dims else x.unsqueeze(0).unsqueeze(0)
+        x = torch.nn.functional.interpolate(x, size=chunk_size, mode="nearest")
+        x = x.squeeze(0).unflatten(0, other_shape).permute(from_standard) if other_dims else x.squeeze(0).squeeze(0)
+    return x
+
+
+def nearest_interpolation_nd(
+    x: Tensor,
+    size: Sequence[int],
+    dims: Sequence[int] | None = None,
+) -> Tensor:
+    """Resize selected tensor dimensions using nearest-neighbor interpolation.
+
+    Parameters
+    ----------
+    x
+        Input tensor.
+    size
+        Target size for the interpolated dimensions.
+    dims
+        Dimensions to interpolate. If None, interpolates the last ``len(size)`` dimensions.
+
+    Returns
+    -------
+        Tensor with selected dimensions resized to ``size``.
+    """
+    if len(size) == 0:
+        return x
+    if x.is_complex():
+        return torch.complex(
+            _nearest_interpolation_nd_real(x.real, size, dims),
+            _nearest_interpolation_nd_real(x.imag, size, dims),
+        )
+    return _nearest_interpolation_nd_real(x, size, dims)
+
+
 def _adjoint_linear_interpolation_nd_real(
     x: Tensor,
     input_size: Sequence[int],
@@ -197,6 +266,76 @@ def adjoint_linear_interpolation_nd(
             _adjoint_linear_interpolation_nd_real(x.imag, input_size, dims, align_corners),
         )
     return _adjoint_linear_interpolation_nd_real(x, input_size, dims, align_corners)
+
+
+def _adjoint_nearest_interpolation_nd_real(
+    x: Tensor,
+    input_size: Sequence[int],
+    dims: Sequence[int] | None = None,
+) -> Tensor:
+    input_size = tuple(input_size)
+    if dims is None:
+        if len(input_size) > x.ndim:
+            raise ValueError("len(input_size) must be <= x.ndim")
+        target_dims = tuple(range(x.ndim - len(input_size), x.ndim))
+    elif len(dims) != len(input_size):
+        raise ValueError("len(dims) must equal len(input_size)")
+    else:
+        target_dims = _normalize_dims(x.ndim, dims)
+    if len(set(target_dims)) != len(target_dims) or any(dim < 0 or dim >= x.ndim for dim in target_dims):
+        raise ValueError("target_dims must be unique and within tensor dimensions")
+
+    chunks = [(target_dims[i : i + 3], input_size[i : i + 3]) for i in range(0, len(target_dims), 3)]
+    for chunk_dims, chunk_input_size in reversed(chunks):
+        output_size = tuple(x.shape[dim] for dim in chunk_dims)
+
+        other_dims = tuple(dim for dim in range(x.ndim) if dim not in chunk_dims)
+        to_standard = (*other_dims, *chunk_dims)
+        from_standard = tuple(sorted(range(len(to_standard)), key=to_standard.__getitem__))
+        other_shape = tuple(x.shape[dim] for dim in other_dims)
+
+        x = x.permute(to_standard)
+        x = x.flatten(end_dim=len(other_dims) - 1).unsqueeze(0) if other_dims else x.unsqueeze(0).unsqueeze(0)
+
+        x = NEAREST_INTERPOLATION_ADJOINT_REGISTRY[len(chunk_input_size)](
+            x,
+            list(output_size),
+            [x.shape[0], x.shape[1], *chunk_input_size],
+            *([None] * len(chunk_input_size)),
+        )
+
+        x = x.squeeze(0).unflatten(0, other_shape).permute(from_standard) if other_dims else x.squeeze(0).squeeze(0)
+    return x
+
+
+def adjoint_nearest_interpolation_nd(
+    x: Tensor,
+    input_size: Sequence[int],
+    dims: Sequence[int] | None = None,
+) -> Tensor:
+    """Apply the adjoint of ``nearest_interpolation_nd``.
+
+    Parameters
+    ----------
+    x
+        Tensor in the output space of ``nearest_interpolation_nd``.
+    input_size
+        Size of the selected dimensions before interpolation.
+    dims
+        Dimensions that were interpolated. If None, uses the last ``len(input_size)`` dimensions.
+
+    Returns
+    -------
+        Tensor in the input space of ``nearest_interpolation_nd``.
+    """
+    if len(input_size) == 0:
+        return x
+    if x.is_complex():
+        return torch.complex(
+            _adjoint_nearest_interpolation_nd_real(x.real, input_size, dims),
+            _adjoint_nearest_interpolation_nd_real(x.imag, input_size, dims),
+        )
+    return _adjoint_nearest_interpolation_nd_real(x, input_size, dims)
 
 
 def conv_nd(
@@ -548,10 +687,6 @@ def _pad_non_constant(
     pad_pairs: list[tuple[int, int]],
     mode: str,
 ) -> Tensor:
-    for left, right in pad_pairs:
-        if left < 0 or right < 0:
-            raise ValueError(f"Negative padding is not supported for mode '{mode}'. Use mode='constant' for cropping.")
-
     result = x
 
     for i in range(0, len(target_dims), 3):

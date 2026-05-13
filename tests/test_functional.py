@@ -7,9 +7,11 @@ import torch
 
 from torchnd import (
     adjoint_linear_interpolation_nd,
+    adjoint_nearest_interpolation_nd,
     adjoint_pad_nd,
     conv_nd,
     linear_interpolation_nd,
+    nearest_interpolation_nd,
     pad_nd,
     pad_or_crop_to_size,
 )
@@ -380,10 +382,12 @@ class TestPadNd:
             pad_nd(torch.zeros(2, 2), **kwargs)
 
     @pytest.mark.parametrize("mode", ["reflect", "replicate", "circular"])
-    def test_negative_padding_non_constant_raises(self, mode: str) -> None:
-        """Verify negative padding with non-constant mode raises ValueError."""
-        with pytest.raises(ValueError, match="Negative padding is not supported"):
-            pad_nd(torch.zeros(5, 5), (-1, 0), dims=(0,), mode=mode)
+    def test_negative_padding_non_constant_crops(self, mode: str) -> None:
+        """Verify negative padding works for non-constant modes."""
+        x = torch.arange(5).float()[None, None, :]
+        out = pad_nd(x, (-1, 1), dims=(2,), mode=mode)
+        expected = torch.nn.functional.pad(x, (-1, 1), mode=mode)
+        torch.testing.assert_close(out, expected)
 
     def test_multi_dim_non_constant_chunking(self) -> None:
         """Verify correct handling of >3 dims requiring multiple pad calls."""
@@ -673,3 +677,80 @@ class TestLinearInterpolationNd:
         y = torch.randn(5, 2, 3, 6, 7)
         result = torch.func.vmap(lambda x: adjoint_linear_interpolation_nd(x, input_size=(12, 14), dims=(-2, -1)))(y)
         assert result.shape == (5, 2, 3, 12, 14)
+
+
+class TestNearestInterpolationNd:
+    """Tests for nearest_interpolation_nd and adjoint_nearest_interpolation_nd."""
+
+    @pytest.mark.parametrize(
+        "shape, size, dims",
+        [
+            ((2, 3, 16), (7,), (-1,)),
+            ((2, 3, 16, 18), (7, 9), (-2, -1)),
+            ((2, 3, 8, 10, 12), (4, 5, 6), (-3, -2, -1)),
+        ],
+    )
+    def test_matches_torch_interpolate(
+        self,
+        shape: tuple[int, ...],
+        size: tuple[int, ...],
+        dims: tuple[int, ...],
+    ) -> None:
+        """Verify standard layouts match torch.nn.functional.interpolate."""
+        x = torch.randn(shape)
+        expected = torch.nn.functional.interpolate(x, size=size, mode="nearest")
+        result = nearest_interpolation_nd(x, size, dims=dims)
+        torch.testing.assert_close(result, expected)
+
+    def test_arbitrary_dims(self) -> None:
+        """Verify interpolation works when spatial dimensions are not trailing."""
+        x = torch.randn(2, 12, 3, 14)
+        result = nearest_interpolation_nd(x, size=(6, 7), dims=(1, 3))
+        assert result.shape == (2, 6, 3, 7)
+
+    def test_complex(self) -> None:
+        """Verify complex tensors are interpolated component-wise."""
+        x = torch.randn(2, 3, 12, 14, dtype=torch.complex64)
+        result = nearest_interpolation_nd(x, size=(6, 7), dims=(-2, -1))
+        expected = torch.complex(
+            nearest_interpolation_nd(x.real, size=(6, 7), dims=(-2, -1)),
+            nearest_interpolation_nd(x.imag, size=(6, 7), dims=(-2, -1)),
+        )
+        torch.testing.assert_close(result, expected)
+
+    def test_more_than_three_dims(self) -> None:
+        """Verify interpolation with more than three dimensions uses multiple backend calls."""
+        x = torch.randn(2, 3, 4, 5, 6)
+        result = nearest_interpolation_nd(x, size=(3, 4, 5, 7), dims=(1, 2, 3, 4))
+        assert result.shape == (2, 3, 4, 5, 7)
+
+    @pytest.mark.parametrize(
+        "shape, size, dims, dtype",
+        [
+            ((2, 3, 16), (7,), (-1,), torch.float32),
+            ((2, 12, 3, 14), (6, 7), (1, 3), torch.float32),
+            ((2, 3, 8, 10, 12), (4, 5, 6), (-3, -2, -1), torch.complex64),
+            ((2, 3, 4, 5, 6), (4, 3, 4, 5), (1, 2, 3, 4), torch.float32),
+        ],
+    )
+    def test_adjointness(
+        self,
+        shape: tuple[int, ...],
+        size: tuple[int, ...],
+        dims: tuple[int, ...],
+        dtype: torch.dtype,
+    ) -> None:
+        """Verify <Ax, y> == <x, A^H y>."""
+        x = torch.randn(shape, dtype=dtype)
+        y_shape = list(shape)
+        normalized_dims = tuple(dim % len(shape) for dim in dims)
+        for dim, target in zip(normalized_dims, size, strict=True):
+            y_shape[dim] = target
+        y = torch.randn(y_shape, dtype=dtype)
+
+        ax = nearest_interpolation_nd(x, size, dims=dims)
+        ahy = adjoint_nearest_interpolation_nd(y, [shape[dim] for dim in normalized_dims], dims=dims)
+
+        lhs = torch.vdot(ax.flatten(), y.flatten())
+        rhs = torch.vdot(x.flatten(), ahy.flatten())
+        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
