@@ -50,11 +50,15 @@ def _linear_interpolation_nd_real(
 ) -> Tensor:
     size = tuple(size)
     if dims is None:
+        if len(size) > x.ndim:
+            raise ValueError("len(size) must be <= x.ndim")
         target_dims = tuple(range(x.ndim - len(size), x.ndim))
     elif len(dims) != len(size):
         raise ValueError("len(dims) must equal len(size)")
     else:
         target_dims = _normalize_dims(x.ndim, dims)
+    if len(set(target_dims)) != len(target_dims) or any(dim < 0 or dim >= x.ndim for dim in target_dims):
+        raise ValueError("target_dims must be unique and within tensor dimensions")
 
     for i in range(0, len(target_dims), 3):
         chunk_dims = target_dims[i : i + 3]
@@ -124,11 +128,15 @@ def _adjoint_linear_interpolation_nd_real(
 ) -> Tensor:
     input_size = tuple(input_size)
     if dims is None:
+        if len(input_size) > x.ndim:
+            raise ValueError("len(input_size) must be <= x.ndim")
         target_dims = tuple(range(x.ndim - len(input_size), x.ndim))
     elif len(dims) != len(input_size):
         raise ValueError("len(dims) must equal len(input_size)")
     else:
         target_dims = _normalize_dims(x.ndim, dims)
+    if len(set(target_dims)) != len(target_dims) or any(dim < 0 or dim >= x.ndim for dim in target_dims):
+        raise ValueError("target_dims must be unique and within tensor dimensions")
 
     chunks = [(target_dims[i : i + 3], input_size[i : i + 3]) for i in range(0, len(target_dims), 3)]
     for chunk_dims, chunk_input_size in reversed(chunks):
