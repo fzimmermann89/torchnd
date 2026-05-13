@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchnd"
-version = "0.1.2"
-description = "ND Convolution for PyTorch"
+version = "0.2.0"
+description = "ND operations for PyTorch"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "GPL-3.0-or-later"}
