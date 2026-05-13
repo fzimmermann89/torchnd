@@ -1,6 +1,8 @@
 # torchnd
 
-N-dimensional convolution for PyTorch that works with any number of spatial dimensions, supporting groups, dilation, transposed convolution, complex numbers, and arbitrary dimension layouts.
+N-dimensional operations for PyTorch with flexible dimension specification.
+
+`torchnd` provides convolution, transposed convolution, padding/cropping, linear interpolation, and corresponding adjoint operations for tensors with arbitrary dimension layouts. It supports complex tensors where applicable and uses native PyTorch 1D/2D/3D kernels whenever possible.
 
 ## Installation
 
@@ -81,6 +83,17 @@ cropped = pad_nd(x, pad=(-1, -1), dims=(0,))  # Negative values crop
 unpadded = adjoint_pad_nd(padded, pad=(1, 1, 2, 2), dims=(-2, -1))
 ```
 
+**Linear interpolation:**
+```python
+from torchnd import linear_interpolation_nd, adjoint_linear_interpolation_nd
+
+x = torch.randn(2, 4, 64, 64)
+low = linear_interpolation_nd(x, size=(32, 32), dims=(-2, -1))
+
+# Adjoint of the interpolation operator
+high_adjoint = adjoint_linear_interpolation_nd(low, input_size=(64, 64), dims=(-2, -1))
+```
+
 **Adjoint operators:**
 ```python
 from torchnd import ConvNd
@@ -118,6 +131,18 @@ Pad or crop a tensor to a target size, centering the original content. Combines 
 
 Computes the adjoint of `pad_nd` via autograd. For a padding operator P, the adjoint P* satisfies the inner product identity: `<Px, y> = <x, P*y>` for all x, y. The adjoint unpads the tensor, summing contributions from padded regions back into the original shape. For constant/zeros mode, the adjoint is equivalent to cropping. For other modes, it correctly handles the adjoint of the boundary extension.
 
+### linear_interpolation_nd
+
+Resizes selected tensor dimensions using linear interpolation. The `dims` parameter specifies which dimensions are interpolated; if `None`, the last `len(size)` dimensions are used. For more than three interpolated dimensions, the operation is split into chunks of up to three dimensions to use PyTorch's native interpolation kernels.
+
+Complex tensors are handled by applying interpolation to real and imaginary parts separately.
+
+### adjoint_linear_interpolation_nd
+
+Computes the adjoint of `linear_interpolation_nd`. The adjoint is evaluated with PyTorch's native interpolation backward kernels and satisfies the inner product identity `<Ax, y> = <x, A*y>` for the linear interpolation operator A.
+
+The adjoint supports autograd, forward-mode AD, and `torch.func.vmap`.
+
 ### Adjoint convolution
 
 The `ConvNd` and `ConvTransposeNd` modules provide `adjoint()` methods. For `ConvNd`, the adjoint is the transposed convolution with conjugated weights (for complex) or identical weights (for real). For `ConvTransposeNd`, the adjoint is the forward convolution with conjugated weights.
@@ -127,6 +152,8 @@ The adjoint satisfies the inner product identity: `<Ax, y> = <x, A*y>` where A i
 ## Implementation
 
 For dimensions beyond 3D, `conv_nd` recursively decomposes the convolution into lower-dimensional operations. A 4D convolution becomes a sum of 3D convolutions applied to strided slices of the input.
+
+For interpolation of more than three dimensions, `linear_interpolation_nd` applies native PyTorch interpolation to chunks of up to three dimensions. The adjoint applies the corresponding chunks in reverse order.
 
 Complex convolution is handled by decomposing into real operations: `(a+bi)*(c+di) = (ac-bd) + (ad+bc)i`.
 
