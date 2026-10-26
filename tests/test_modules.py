@@ -122,7 +122,7 @@ class TestAdjoint:
     """Test adjoint operator correctness."""
 
     @pytest.mark.parametrize("ndim", [1, 2, 3])
-    @pytest.mark.parametrize("dtype", [torch.float32, torch.complex64])
+    @pytest.mark.parametrize("dtype", [torch.float64, torch.complex128])
     @pytest.mark.parametrize(
         "config",
         [
@@ -153,11 +153,10 @@ class TestAdjoint:
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y, input_shape=input_shape[2:]).flatten())
 
-        rtol = 1e-4 if dtype == torch.float32 else 1e-5
-        torch.testing.assert_close(lhs, rhs, rtol=rtol, atol=rtol)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
 
     @pytest.mark.parametrize("ndim", [1, 2, 3])
-    @pytest.mark.parametrize("dtype", [torch.float32, torch.complex64])
+    @pytest.mark.parametrize("dtype", [torch.float64, torch.complex128])
     @pytest.mark.parametrize(
         "config",
         [
@@ -190,8 +189,7 @@ class TestAdjoint:
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y).flatten())
 
-        rtol = 1e-4 if dtype == torch.float32 else 1e-5
-        torch.testing.assert_close(lhs, rhs, rtol=rtol, atol=rtol)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
 
     def test_raises_with_bias(self) -> None:
         """Adjoint raises ValueError if bias is present."""
@@ -460,16 +458,17 @@ class TestPaddingModeAdjoint:
             padding=2,
             padding_mode=mode,
             bias=False,
+            dtype=torch.float64,
         )
 
         input_shape = (x_shape[0], in_ch, *x_shape[2:])
-        x = torch.randn(input_shape)
+        x = torch.randn(input_shape, dtype=torch.float64)
         y = torch.randn_like(conv(x))
 
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y, input_shape=input_shape[2:]).flatten())
 
-        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
 
     @pytest.mark.parametrize("mode", ["zeros", "reflect", "replicate", "circular"])
     @pytest.mark.parametrize("ndim", [1, 2])
@@ -486,18 +485,19 @@ class TestPaddingModeAdjoint:
             padding=2,
             padding_mode=mode,
             bias=False,
+            dtype=torch.float64,
         )
 
         spatial_in = tuple(s // 2 for s in x_shape[2:])
         input_shape = (x_shape[0], in_ch, *spatial_in)
 
-        x = torch.randn(input_shape)
+        x = torch.randn(input_shape, dtype=torch.float64)
         y = torch.randn_like(conv(x))
 
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y).flatten())
 
-        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
 
     @pytest.mark.parametrize(
         "modes",
@@ -518,15 +518,16 @@ class TestPaddingModeAdjoint:
             padding=2,
             padding_mode=modes,
             bias=False,
+            dtype=torch.float64,
         )
 
-        x = torch.randn(2, 4, 16, 16)
+        x = torch.randn(2, 4, 16, 16, dtype=torch.float64)
         y = torch.randn_like(conv(x))
 
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y, input_shape=(16, 16)).flatten())
 
-        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
 
     @pytest.mark.parametrize(
         "modes",
@@ -547,15 +548,16 @@ class TestPaddingModeAdjoint:
             padding=2,
             padding_mode=modes,
             bias=False,
+            dtype=torch.float64,
         )
 
-        x = torch.randn(2, 8, 8, 8)
+        x = torch.randn(2, 8, 8, 8, dtype=torch.float64)
         y = torch.randn_like(conv(x))
 
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y).flatten())
 
-        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
 
     def test_3d_mixed_modes_adjoint(self) -> None:
         """Verify adjoint identity with 3 different padding modes."""
@@ -567,15 +569,16 @@ class TestPaddingModeAdjoint:
             padding=1,
             padding_mode=("reflect", "replicate", "circular"),
             bias=False,
+            dtype=torch.float64,
         )
 
-        x = torch.randn(2, 4, 8, 8, 8)
+        x = torch.randn(2, 4, 8, 8, 8, dtype=torch.float64)
         y = torch.randn_like(conv(x))
 
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y, input_shape=(8, 8, 8)).flatten())
 
-        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
 
 
 class TestAdjointWithOutputPadding:
@@ -598,13 +601,14 @@ class TestAdjointWithOutputPadding:
             padding=1,
             output_padding=output_padding,
             bias=False,
+            dtype=torch.float64,
         )
 
         input_shape = (2, in_ch, *spatial_in)
-        x = torch.randn(input_shape)
+        x = torch.randn(input_shape, dtype=torch.float64)
         y = torch.randn_like(conv(x))
 
         lhs = torch.vdot(conv(x).flatten(), y.flatten())
         rhs = torch.vdot(x.flatten(), conv.adjoint(y).flatten())
 
-        torch.testing.assert_close(lhs, rhs, rtol=1e-4, atol=1e-5)
+        torch.testing.assert_close(lhs, rhs, rtol=1e-10, atol=1e-10)
