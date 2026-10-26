@@ -109,6 +109,19 @@ N-dimensional convolution with flexible dimension specification. Supports arbitr
 
 The `dim` parameter specifies which dimensions are spatial. The `channel_dim` parameter specifies the channel dimension. This allows for arbitrary tensor layouts (e.g., channel-last).
 
+`conv_nd`, `ConvNd`, and `ConvTransposeNd` accept `convolution=True` for
+mathematical convolution. The default keeps PyTorch's cross-correlation
+convention. Each call reverses the spatial kernel axes without changing the
+stored weight. Forward and transposed calls do not conjugate complex weights;
+`adjoint()` conjugates them and keeps the chosen convention. See the `conv_nd`
+docstring for the exact indexing and functional adjoint arguments.
+
+```python
+conv = ConvNd(4, 8, 3, padding=1, bias=False, convolution=True)
+y = conv(x)
+x_adjoint = conv.adjoint(y)
+```
+
 ### pad_nd
 
 N-dimensional padding and cropping with flexible dimension specification. Supports arbitrary dimension layouts, not limited to the last N dimensions. Negative padding values crop the tensor.
