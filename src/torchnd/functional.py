@@ -341,13 +341,16 @@ def conv_nd(
     groups: int = 1,
     transposed: bool = False,
     output_padding: int | tuple[int, ...] = 0,
+    convolution: bool = False,
 ) -> Tensor:
     """N-dimensional convolution with flexible dimension specification.
 
     Supports arbitrary spatial dimensions via recursive decomposition when
     native PyTorch implementations (1D, 2D, 3D) are unavailable.
 
-    Note: Strictly speaking, this implements correlation, not convolution. But it matches pytorch's naming convention.
+    By default, uses PyTorch's cross-correlation convention without conjugating
+    the kernel. Set ``convolution=True`` to reverse all spatial kernel axes
+    before applying the same operation. The stored/passed weight is unchanged.
 
     Parameters
     ----------
@@ -373,11 +376,25 @@ def conv_nd(
         If True, perform transposed (fractionally-strided) convolution.
     output_padding
         Additional size for transposed conv output (disambiguates shape).
+    convolution
+        If True, reverse the spatial kernel axes on each call. For one spatial
+        axis, the forward operation is
+        ``y[o, n] = sum(w[o, c, K-1-k] * x[c, n*s-p+k*d])``;
+        otherwise it uses ``w[o, c, k]``. Indices outside the input are zero.
+        Sums run over kernel indices and input channels within each group.
+        With ``transposed=True``, scatter ``x[c, n] * w[c, o, K-1-k]``
+        (or ``w[c, o, k]``) to ``y[o, n*s-p+k*d]``. Neither operation
+        conjugates the weight. To obtain the Hermitian adjoint, toggle
+        ``transposed`` and conjugate the weight, keeping ``convolution``
+        unchanged and choosing ``output_padding`` to recover the input shape.
 
     Returns
     -------
         Convolved output preserving input's dimension layout.
     """
+    if convolution and len(dim) > 0:
+        weight = weight.flip(tuple(range(2, weight.ndim)))
+
     num_spatial = len(dim)
     stride = _normalize_tuple(stride, num_spatial)
     padding = _normalize_tuple(padding, num_spatial)

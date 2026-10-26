@@ -27,6 +27,7 @@ class _ConvNdBase(torch.nn.Module, ABC):
     dilation: tuple[int, ...]
     groups: int
     padding_mode: tuple[str, ...]
+    convolution: bool
 
     def __init__(
         self,
@@ -45,6 +46,7 @@ class _ConvNdBase(torch.nn.Module, ABC):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         weight: Tensor | None = None,
+        convolution: bool = False,
     ) -> None:
         """Initialize N-dimensional convolution.
 
@@ -83,6 +85,11 @@ class _ConvNdBase(torch.nn.Module, ABC):
         weight
             If provided, uses as external weight (enables hypernetwork usage).
             Registered as buffer to be included in state_dict.
+        convolution
+            If True, reverse all spatial kernel axes on each call to use
+            mathematical convolution. Defaults to PyTorch cross-correlation.
+            Forward never conjugates the weight; adjoint conjugates it and
+            keeps the same spatial reversal. See ``conv_nd`` for index formulas.
         """
         super().__init__()
 
@@ -102,6 +109,7 @@ class _ConvNdBase(torch.nn.Module, ABC):
         self.output_padding = _normalize_tuple(output_padding, num_spatial)
         self.dilation = _normalize_tuple(dilation, num_spatial)
         self.groups = groups
+        self.convolution = convolution
 
         if isinstance(padding_mode, str):
             self.padding_mode = (padding_mode,) * num_spatial
@@ -205,6 +213,8 @@ class _ConvNdBase(torch.nn.Module, ABC):
             parts.append(f"output_padding={self.output_padding}")
         if self.groups != 1:
             parts.append(f"groups={self.groups}")
+        if self.convolution:
+            parts.append("convolution=True")
         if self.bias is None:
             parts.append("bias=False")
         if not all(m == "zeros" for m in self.padding_mode):
@@ -261,6 +271,7 @@ class ConvNd(_ConvNdBase):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         weight: Tensor | None = None,
+        convolution: bool = False,
     ) -> None:
         """Initialize N-dimensional convolution.
 
@@ -295,6 +306,11 @@ class ConvNd(_ConvNdBase):
             Data type for parameters. Complex dtypes enable complex convolution.
         weight
             If provided, uses as external weight. Registered as buffer for state_dict.
+        convolution
+            If True, reverse all spatial kernel axes on each call to use
+            mathematical convolution. Defaults to PyTorch cross-correlation.
+            Forward never conjugates the weight; adjoint conjugates it and
+            keeps the same spatial reversal. See ``conv_nd`` for index formulas.
         """
         super().__init__(
             in_channels=in_channels,
@@ -312,6 +328,7 @@ class ConvNd(_ConvNdBase):
             device=device,
             dtype=dtype,
             weight=weight,
+            convolution=convolution,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -351,6 +368,7 @@ class ConvNd(_ConvNdBase):
             dilation=self.dilation,
             groups=self.groups,
             transposed=False,
+            convolution=self.convolution,
         )
 
         if self.bias is not None:
@@ -364,7 +382,8 @@ class ConvNd(_ConvNdBase):
         """Apply the adjoint convolution operator.
 
         The adjoint of a convolution is the transposed convolution with
-        conjugated weights (for complex) or identical weights (for real).
+        conjugated weights (for complex) or identical weights (for real),
+        retaining the same ``convolution`` setting.
 
         This method applies the adjoint using the same weights (and does not
         allocate a new module). Intended for iterative algorithms, not separate
@@ -436,6 +455,7 @@ class ConvNd(_ConvNdBase):
             dilation=self.dilation,
             groups=self.groups,
             transposed=True,
+            convolution=self.convolution,
             output_padding=out_pad,
         )
 
@@ -484,6 +504,7 @@ class ConvTransposeNd(_ConvNdBase):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         weight: Tensor | None = None,
+        convolution: bool = False,
     ) -> None:
         """Initialize N-dimensional transposed convolution.
 
@@ -520,6 +541,11 @@ class ConvTransposeNd(_ConvNdBase):
             Data type for parameters. Complex dtypes enable complex convolution.
         weight
             If provided, uses as external weight. Registered as buffer for state_dict.
+        convolution
+            If True, reverse all spatial kernel axes on each call to use
+            mathematical convolution. Defaults to PyTorch cross-correlation.
+            Forward never conjugates the weight; adjoint conjugates it and
+            keeps the same spatial reversal. See ``conv_nd`` for index formulas.
         """
         super().__init__(
             in_channels=in_channels,
@@ -537,6 +563,7 @@ class ConvTransposeNd(_ConvNdBase):
             device=device,
             dtype=dtype,
             weight=weight,
+            convolution=convolution,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -568,6 +595,7 @@ class ConvTransposeNd(_ConvNdBase):
             dilation=self.dilation,
             groups=self.groups,
             transposed=True,
+            convolution=self.convolution,
             output_padding=self.output_padding,
         )
 
@@ -602,7 +630,8 @@ class ConvTransposeNd(_ConvNdBase):
         """Apply the adjoint convolution operator.
 
         The adjoint of a transposed convolution is the (forward) convolution with
-        conjugated weights (for complex) or identical weights (for real).
+        conjugated weights (for complex) or identical weights (for real),
+        retaining the same ``convolution`` setting.
 
         This method applies the adjoint using the same weights (and does not
         allocate a new module). Intended for iterative algorithms, not separate
@@ -650,4 +679,5 @@ class ConvTransposeNd(_ConvNdBase):
             dilation=self.dilation,
             groups=self.groups,
             transposed=False,
+            convolution=self.convolution,
         )
