@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
 
 import torch
 from torch import Tensor
@@ -12,7 +12,7 @@ from torch.utils.checkpoint import checkpoint
 from .functional import _normalize_tuple, adjoint_pad_nd, conv_nd, pad_nd
 
 
-class _ConvNdBase(torch.nn.Module, ABC):
+class _ConvNdBase(torch.nn.Module, metaclass=ABCMeta):
     """Base class for N-dimensional convolution modules."""
 
     transposed: bool = False
