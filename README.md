@@ -109,6 +109,19 @@ N-dimensional convolution with flexible dimension specification. Supports arbitr
 
 The `dim` parameter specifies which dimensions are spatial. The `channel_dim` parameter specifies the channel dimension. This allows for arbitrary tensor layouts (e.g., channel-last).
 
+`conv_nd`, `ConvNd`, and `ConvTransposeNd` accept `convolution=True` for
+mathematical convolution. The default keeps PyTorch's cross-correlation
+convention. Each call reverses the spatial kernel axes without changing the
+stored weight. Forward and transposed calls do not conjugate complex weights;
+`adjoint()` conjugates them and keeps the chosen convention. See the `conv_nd`
+docstring for the exact indexing and functional adjoint arguments.
+
+```python
+conv = ConvNd(4, 8, 3, padding=1, bias=False, convolution=True)
+y = conv(x)
+x_adjoint = conv.adjoint(y)
+```
+
 ### pad_nd
 
 N-dimensional padding and cropping with flexible dimension specification. Supports arbitrary dimension layouts, not limited to the last N dimensions. Negative padding values crop the tensor.
@@ -120,34 +133,6 @@ The `dims` parameter specifies which dimensions to pad. If `None`, pads the last
 ### pad_or_crop_to_size
 
 Pad or crop a tensor to a target size, centering the original content. Combines padding and cropping in a single operation. Useful for resizing tensors to a fixed shape while keeping the content centered.
-
-### Kernel convention
-
-`conv_nd`, `ConvNd`, and `ConvTransposeNd` accept `convolution=True` for
-mathematical convolution. The default, `convolution=False`, keeps PyTorch's
-cross-correlation convention. The setting reverses every spatial kernel axis
-on each call, preserving the original weight and its gradients after updates.
-
-For one axis, the forward operation is
-`y[o, n] = sum(w[o, c, K-1-k] * x[c, n*s-p+k*d])` in convolution mode;
-cross-correlation uses `w[o, c, k]`. Here `s`, `p`, and `d` are stride, padding,
-and dilation. Sums cover kernel indices and channels within each group, with
-zero outside the input. Nonzero module padding modes extend the input first.
-The same indexing applies along every spatial axis.
-
-The transposed operation scatters `x[c, n] * w[c, o, K-1-k]` to
-`y[o, n*s-p+k*d]` (or uses `w[c, o, k]` for cross-correlation). Forward and
-transposed calls do not conjugate complex weights. Module `adjoint()` methods
-conjugate the weight, toggle the transposed operation, and keep the same
-`convolution` setting; nonzero padding is replaced by its adjoint. Functional
-callers can do the same with `weight.conj()` and the appropriate
-`output_padding` to recover the original input shape.
-
-```python
-conv = ConvNd(4, 8, 3, padding=1, bias=False, convolution=True)
-y = conv(x)
-x_adjoint = conv.adjoint(y)
-```
 
 ### adjoint_pad_nd
 

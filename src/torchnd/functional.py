@@ -392,7 +392,7 @@ def conv_nd(
     -------
         Convolved output preserving input's dimension layout.
     """
-    if convolution and len(dim) > 0:
+    if convolution:
         weight = weight.flip(tuple(range(2, weight.ndim)))
 
     num_spatial = len(dim)

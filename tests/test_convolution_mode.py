@@ -43,11 +43,10 @@ def reference_conv(
             if any(i < 0 or i >= n for i, n in zip(target, limits, strict=True)):
                 continue
             wi = tuple(k - 1 - i for k, i in zip(kernel, offset, strict=True)) if convolution else offset
-            w = weight[(ic, co, *wi)] if transposed else weight[(oc, ci, *wi)]
-            if transposed:
-                out[(batch, oc, *target)] += x[(batch, ic, *pos)] * w
-            else:
-                out[(batch, oc, *pos)] += x[(batch, ic, *target)] * w
+            weight_index = (ic, co, *wi) if transposed else (oc, ci, *wi)
+            out_index = (batch, oc, *target) if transposed else (batch, oc, *pos)
+            in_index = (batch, ic, *pos) if transposed else (batch, ic, *target)
+            out[out_index] += x[in_index] * weight[weight_index]
     return out
 
 
@@ -212,3 +211,17 @@ def test_weight_updates(conv_type: type[ConvNd] | type[ConvTransposeNd], externa
             weight.add_(step + 1)
         weight.grad = None
     assert "convolution=True" in repr(module)
+
+
+@pytest.mark.parametrize("conv_type", [ConvNd, ConvTransposeNd])
+def test_legacy_module_default(conv_type: type[ConvNd] | type[ConvTransposeNd]) -> None:
+    """Modules pickled before the setting existed keep cross-correlation."""
+    module = conv_type(1, 1, 3, dim=(-1,), bias=False, dtype=torch.float64)
+    x = torch.arange(5.0, dtype=torch.float64).unflatten(0, (1, 1, 5))
+    expected = module(x)
+    del module.convolution
+    assert module.convolution is False
+    torch.testing.assert_close(module(x), expected)
+    torch.testing.assert_close(
+        module.adjoint(expected), reference_conv(expected, module.weight, convolution=False, transposed=not module.transposed)
+    )

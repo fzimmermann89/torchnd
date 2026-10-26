@@ -27,7 +27,7 @@ class _ConvNdBase(torch.nn.Module, ABC):
     dilation: tuple[int, ...]
     groups: int
     padding_mode: tuple[str, ...]
-    convolution: bool
+    convolution: bool = False
 
     def __init__(
         self,
